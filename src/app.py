@@ -14,6 +14,10 @@ from pathlib import Path
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
+# Lightweight admin mode credentials for privileged actions.
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "mergington-admin")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "admin-session-token")
+
 # Mount the static files directory
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
@@ -88,6 +92,21 @@ def get_activities():
     return activities
 
 
+@app.post("/admin/login")
+def admin_login(password: str):
+    """Login endpoint for admin mode in the web UI."""
+    if password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+
+    return {"token": ADMIN_TOKEN}
+
+
+@app.post("/admin/logout")
+def admin_logout():
+    """Logout endpoint for admin mode in the web UI."""
+    return {"message": "Logged out of admin mode"}
+
+
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
@@ -111,8 +130,12 @@ def signup_for_activity(activity_name: str, email: str):
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
+def unregister_from_activity(activity_name: str, email: str, admin_token: str):
     """Unregister a student from an activity"""
+    # Only admins can remove participants.
+    if admin_token != ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="Admin mode required")
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
